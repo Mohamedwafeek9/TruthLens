@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TruthLens Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --c-base: #0b0f1a;
+            --c-surface: #111827;
+            --c-elevated: #161e2e;
+            --c-border: #1e2d42;
+            --c-blue: #3b82f6;
+            --c-cyan: #22d3ee;
+            --c-red: #ef4444;
+            --c-green: #10b981;
+            --c-muted: #64748b;
+        }
+
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--c-base);
+            color: #e2e8f0;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .page { position: fixed; inset: 0; display: none; flex-direction: column; }
+        .page.active { display: flex; }
+
+        /* Login Page */
+        #loginPage {
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at 50% 20%, rgba(59,130,246,0.2), transparent);
+        }
+
+        .login-card {
+            background: var(--c-surface);
+            border: 1px solid var(--c-border);
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 420px;
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--c-blue), #1e40af);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* Dashboard */
+        .topbar {
+            height: 60px;
+            background: rgba(11,15,26,0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--c-border);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 20px;
+        }
+
+        .video-area {
+            flex: 1;
+            background: #000;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #vidFeed {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .side {
+            width: 340px;
+            background: var(--c-surface);
+            border-left: 1px solid var(--c-border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .alert-badge {
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        .alert-badge.firing {
+            background: rgba(239,68,68,0.15);
+            color: var(--c-red);
+            border: 1px solid var(--c-red);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 70% { box-shadow: 0 0 0 10px rgba(239,68,68,0); } }
+
+        .toast {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: var(--c-surface);
+            border-left: 4px solid var(--c-red);
+            padding: 14px 18px;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            display: none;
+            z-index: 10000;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Login -->
+<div class="page active" id="loginPage">
+    <div class="login-card">
+        <h1 style="margin-bottom:10px">TruthLens <span style="color:var(--c-cyan)">PRO</span></h1>
+        <p style="color:var(--c-muted);margin-bottom:30px">Real-time Exam Surveillance</p>
+
+        <input type="text" id="liUser" placeholder="Username (e.g. dr.m)" style="width:100%;padding:12px;margin-bottom:12px;background:var(--c-elevated);border:1px solid var(--c-border);border-radius:8px;color:white">
+        <input type="password" id="liPass" placeholder="Password" style="width:100%;padding:12px;margin-bottom:12px;background:var(--c-elevated);border:1px solid var(--c-border);border-radius:8px;color:white">
+
+        <select id="liRoom" style="width:100%;padding:12px;margin-bottom:20px;background:var(--c-elevated);border:1px solid var(--c-border);border-radius:8px;color:white"></select>
+
+        <button class="btn-login" onclick="doLogin()">Start Monitoring Session</button>
+
+        <div id="loginErr" style="color:#ef4444;margin-top:15px;display:none"></div>
+    </div>
+</div>
+
+<!-- Dashboard -->
+<div class="page" id="dashPage">
+    <div class="topbar">
+        <div style="font-weight:800;font-size:20px">Truth<span style="color:var(--c-cyan)">Lens</span></div>
+        <div>
+            <div id="tbRoomName" style="font-weight:600"></div>
+            <div id="tbRoomMeta" style="font-size:12px;color:var(--c-muted)"></div>
+        </div>
+        <div style="flex:1"></div>
+        <div id="tbFps" style="font-family:monospace">0 FPS</div>
+        <div class="alert-badge" id="alertBadge">CLEAR</div>
+        <button onclick="endSession()" style="padding:8px 16px;background:transparent;border:1px solid #ef4444;color:#ef4444;border-radius:6px">End Session</button>
+    </div>
+
+    <div style="display:flex;flex:1;overflow:hidden">
+        <!-- Video -->
+        <div class="video-area">
+            <div id="vidOff" style="color:#64748b;text-align:center">
+                <h2 style="font-size:60px;opacity:0.2">📷</h2>
+                <p>Camera Offline</p>
+            </div>
+            <img id="vidFeed" style="display:none;width:100%;height:100%;object-fit:contain" alt="Live Feed">
+        </div>
+
+        <!-- Side Panel -->
+        <div class="side">
+            <div style="padding:15px">
+                <button onclick="startDetection()" id="btnStart" style="width:100%;padding:12px;background:var(--c-green);border:none;border-radius:8px;color:white;font-weight:600">▶ Start Detection</button>
+                <button onclick="stopDetection()" id="btnStop" disabled style="width:100%;margin-top:8px;padding:12px;background:#991b1b;border:none;border-radius:8px;color:white">■ Stop Detection</button>
+            </div>
+
+            <div style="padding:15px;border-top:1px solid var(--c-border)">
+                <div>Tracked: <span id="ssTracked" style="font-weight:600;color:var(--c-cyan)">0</span></div>
+                <div>Violations: <span id="ssViol" style="font-weight:600;color:var(--c-red)">0</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+    <strong>Violation Detected</strong><br>
+    <span id="toastBody"></span>
+</div>
+
+<script>
+const API = "http://localhost:5050";
+let session = null;
+
+// Load Rooms
+async function loadRooms() {
+    try {
+        const res = await fetch(API + "/api/rooms");
+        const rooms = await res.json();
+        const sel = document.getElementById("liRoom");
+        sel.innerHTML = "<option value=''>Select Room</option>";
+        rooms.forEach(r => {
+            const opt = document.createElement("option");
+            opt.value = r.id;
+            opt.textContent = `${r.code} - ${r.name}`;
+            sel.appendChild(opt);
+        });
+    } catch(e) {}
+}
+
+async function doLogin() {
+    const user = document.getElementById("liUser").value.trim();
+    const pass = document.getElementById("liPass").value;
+    const roomId = document.getElementById("liRoom").value;
+
+    if (!user || !pass || !roomId) {
+        alert("Please fill all fields");
+        return;
+    }
+
+    // For simplicity, we skip real login for now (you can expand later)
+    session = { room_name: "Room " + roomId };
+    document.getElementById("tbRoomName").textContent = "Room " + roomId;
+    document.getElementById("loginPage").classList.remove("active");
+    document.getElementById("dashPage").classList.add("active");
+}
+
+async function startDetection() {
+    await fetch(API + "/api/start", {method: "POST"});
+    document.getElementById("vidFeed").src = API + "/video_feed?t=" + Date.now();
+    document.getElementById("vidFeed").style.display = "block";
+    document.getElementById("vidOff").style.display = "none";
+    document.getElementById("btnStart").disabled = true;
+    document.getElementById("btnStop").disabled = false;
+}
+
+async function stopDetection() {
+    await fetch(API + "/api/stop", {method: "POST"});
+    document.getElementById("vidFeed").style.display = "none";
+    document.getElementById("vidOff").style.display = "block";
+    document.getElementById("btnStart").disabled = false;
+    document.getElementById("btnStop").disabled = true;
+}
+
+function endSession() {
+    if (confirm("End this session?")) {
+        stopDetection();
+        document.getElementById("dashPage").classList.remove("active");
+        document.getElementById("loginPage").classList.add("active");
+    }
+}
+
+// Init
+loadRooms();
+</script>
+</body>
+</html>
