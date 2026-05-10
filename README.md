@@ -1,1 +1,5 @@
-# TruthLens_AI-Driven-Smart-Examination-System
+flask
+flask-cors
+opencv-python
+ultralytics
+numpy
