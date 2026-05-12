@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TruthLens Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --c-base: #0b0f1a;
+            --c-surface: #111827;
+            --c-blue: #3b82f6;
+            --c-cyan: #22d3ee;
+            --c-red: #ef4444;
+            --c-green: #10b981;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--c-base);
+            color: #e2e8f0;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .page { position: fixed; inset: 0; display: none; flex-direction: column; }
+        .page.active { display: flex; }
+        .login-card {
+            background: var(--c-surface);
+            border: 1px solid #1e2d42;
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 420px;
+        }
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--c-blue), #1e40af);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .video-area { flex: 1; background: #000; position: relative; }
+        #vidFeed { width: 100%; height: 100%; object-fit: contain; }
+    </style>
+</head>
+<body>
+
+<div class="page active" id="loginPage">
+    <div class="login-card">
+        <h1>TruthLens <span style="color:var(--c-cyan)">PRO</span></h1>
+        <p style="color:#64748b;margin:10px 0 30px">Real-time Exam Surveillance</p>
+
+        <input type="text" id="liUser" placeholder="Username (e.g. dr.m)" style="width:100%;padding:12px;margin-bottom:12px;background:#161e2e;border:1px solid #1e2d42;border-radius:8px;color:white">
+        <input type="password" id="liPass" placeholder="Password" style="width:100%;padding:12px;margin-bottom:12px;background:#161e2e;border:1px solid #1e2d42;border-radius:8px;color:white">
+        <select id="liRoom" style="width:100%;padding:12px;margin-bottom:20px;background:#161e2e;border:1px solid #1e2d42;border-radius:8px;color:white"></select>
+
+        <button class="btn-login" onclick="doLogin()">Start Monitoring Session</button>
+        <div id="loginErr" style="color:#ef4444;margin-top:10px;display:none"></div>
+    </div>
+</div>
+
+<div class="page" id="dashPage">
+    <div style="height:60px;background:rgba(11,15,26,0.95);display:flex;align-items:center;padding:0 20px;gap:20px;border-bottom:1px solid #1e2d42">
+        <div style="font-weight:800;font-size:20px">Truth<span style="color:var(--c-cyan)">Lens</span></div>
+        <div id="tbRoomName" style="font-weight:600"></div>
+        <div style="flex:1"></div>
+        <div id="tbFps" style="font-family:monospace">0 FPS</div>
+        <button onclick="endSession()" style="padding:8px 16px;background:transparent;border:1px solid #ef4444;color:#ef4444;border-radius:6px">End Session</button>
+    </div>
+
+    <div style="display:flex;flex:1;overflow:hidden">
+        <div class="video-area">
+            <div id="vidOff" style="color:#64748b;text-align:center;padding-top:120px">
+                <h2 style="font-size:60px;opacity:0.2">📷</h2>
+                <p>Camera Offline</p>
+            </div>
+            <img id="vidFeed" style="display:none;width:100%;height:100%;object-fit:contain" alt="Live Feed">
+        </div>
+    </div>
+</div>
+
+<script>
+const API = window.location.origin;
+
+async function loadRooms() {
+    try {
+        const res = await fetch(API + "/api/rooms");
+        const rooms = await res.json();
+        const sel = document.getElementById("liRoom");
+        sel.innerHTML = "<option value=''>Select Room</option>";
+        rooms.forEach(r => {
+            const opt = document.createElement("option");
+            opt.value = r.id;
+            opt.textContent = `${r.code} - ${r.name}`;
+            sel.appendChild(opt);
+        });
+    } catch(e) {
+        console.error("Failed to load rooms", e);
+    }
+}
+
+async function doLogin() {
+    const roomId = document.getElementById("liRoom").value;
+    if (!roomId) {
+        alert("Please select a room");
+        return;
+    }
+
+    document.getElementById("tbRoomName").textContent = "Room " + roomId;
+    document.getElementById("loginPage").classList.remove("active");
+    document.getElementById("dashPage").classList.add("active");
+
+    startDetection();
+}
+
+async function startDetection() {
+    try {
+        await fetch(API + "/api/start", {method: "POST"});
+        const video = document.getElementById("vidFeed");
+        video.src = API + "/video_feed?t=" + Date.now();
+        video.style.display = "block";
+        document.getElementById("vidOff").style.display = "none";
+    } catch(e) {
+        alert("Cannot connect to server. Make sure detector.py is running.");
+    }
+}
+
+function endSession() {
+    if (confirm("End this session?")) {
+        fetch(API + "/api/stop", {method: "POST"});
+        location.reload();
+    }
+}
+
+// Initialize
+loadRooms();
+</script>
+</body>
+</html>
