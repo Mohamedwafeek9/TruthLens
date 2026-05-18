@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TruthLens Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --c-base:    #0b0f1a;
+            --c-surface: #111827;
+            --c-elevated:#161e2e;
+            --c-border:  #1e2d42;
+            --c-blue:    #3b82f6;
+            --c-cyan:    #22d3ee;
+            --c-red:     #ef4444;
+            --c-orange:  #f97316;
+            --c-green:   #10b981;
+            --c-muted:   #64748b;
+        }
+
+        * { margin:0; padding:0; box-sizing:border-box; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--c-base);
+            color: #e2e8f0;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .page {
+            position: fixed; inset: 0;
+            display: none; flex-direction: column;
+        }
+        .page.active { display: flex; }
+
+        /* ── Login ── */
+        #loginPage {
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at 50% 20%, rgba(59,130,246,0.15), transparent 70%);
+        }
+
+        .login-card {
+            background: var(--c-surface);
+            border: 1px solid var(--c-border);
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 420px;
+        }
+
+        .field {
+            width: 100%;
+            padding: 12px 14px;
+            margin-bottom: 12px;
+            background: var(--c-elevated);
+            border: 1px solid var(--c-border);
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color .2s;
+        }
+        .field:focus { border-color: var(--c-blue); }
+
+        .btn-primary {
+            width: 100%;
+            padding: 13px;
+            background: linear-gradient(135deg, var(--c-blue), #1e40af);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity .2s;
+        }
+        .btn-primary:hover { opacity: .88; }
+        .btn-primary:disabled { opacity: .5; cursor: default; }
+
+        /* ── Topbar ── */
+        .topbar {
+            height: 58px;
+            background: rgba(11,15,26,.96);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--c-border);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 16px;
+            flex-shrink: 0;
+        }
+
+        .badge {
+            padding: 4px 14px;
+            border-radius: 30px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .05em;
+        }
+        .badge-ok  { background:rgba(16,185,129,.15); color:var(--c-green); border:1px solid var(--c-green); }
+        .badge-err { background:rgba(239,68,68,.15);  color:var(--c-red);   border:1px solid var(--c-red);
+                     animation: pulse 1.5s infinite; }
+
+        @keyframes pulse {
+            0%   { box-shadow: 0 0 0 0   rgba(239,68,68,.5); }
+            70%  { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+            100% { box-shadow: 0 0 0 0   rgba(239,68,68,0); }
+        }
+
+        /* ── Layout ── */
+        .main-layout {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ── Video ── */
+        .video-area {
+            flex: 1;
+            background: #000;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #vidFeed {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: none;
+        }
+
+        #vidOff {
+            text-align: center;
+            color: var(--c-muted);
+        }
+
+        /* ── Side Panel ── */
+        .side {
+            width: 290px;
+            background: var(--c-surface);
+            border-left: 1px solid var(--c-border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .side-section {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--c-border);
+        }
+
+        .side-label {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .10em;
+            color: var(--c-muted);
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            font-size: 13px;
+        }
+
+        .stat-val {
+            font-family: 'DM Mono', monospace;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        /* violation stat rows — subtle color coding */
+        .stat-row.viol-bp   .stat-val { color: var(--c-orange); }
+        .stat-row.viol-cp   .stat-val { color: #a78bfa; }
+        .stat-row.viol-ph   .stat-val { color: var(--c-cyan); }
+        .stat-row.viol-ps   .stat-val { color: #fbbf24; }
+        .stat-row.viol-rs   .stat-val { color: #fb923c; }
+        .stat-row.viol-tot  .stat-val { color: var(--c-red); }
+
+        .btn-ctrl {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            margin-bottom: 8px;
+            transition: opacity .2s;
+        }
+        .btn-ctrl:disabled { opacity: .4; cursor: default; }
+        .btn-start { background: var(--c-green);  color: #fff; }
+        .btn-stop  { background: #991b1b; color: #fff; }
+
+        /* ── Events log ── */
+        .events-log {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .event-item {
+            background: rgba(239,68,68,.07);
+            border: 1px solid rgba(239,68,68,.18);
+            border-radius: 6px;
+            padding: 7px 10px;
+            margin-bottom: 5px;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .event-time { color: var(--c-muted); font-family:'DM Mono',monospace; }
+        .event-id   { color: var(--c-cyan);  font-weight: 700; }
+        .event-viol { color: #fca5a5; }
+
+        /* ── Timer ── */
+        #tbTimer {
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            color: var(--c-muted);
+        }
+
+        /* ── Toast ── */
+        .toast {
+            position: fixed;
+            top: 68px; right: 18px;
+            background: var(--c-surface);
+            border-left: 4px solid var(--c-red);
+            padding: 12px 16px;
+            border-radius: 8px;
+            box-shadow: 0 8px 30px rgba(0,0,0,.6);
+            z-index: 9999;
+            display: none;
+            max-width: 300px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+
+<!-- ══════════════ LOGIN PAGE ══════════════ -->
+<div class="page active" id="loginPage">
+    <div class="login-card">
+        <h1 style="font-size:26px;margin-bottom:6px">
+            Truth<span style="color:var(--c-cyan)">Lens</span>
+            <span style="font-size:13px;font-weight:400;color:var(--c-muted);margin-left:8px">PRO</span>
+        </h1>
+        <p style="color:var(--c-muted);margin-bottom:28px;font-size:14px">Real-time Exam Surveillance</p>
+
+        <input  class="field" type="text"     id="liUser" placeholder="Username (e.g. dr.m)">
+        <input  class="field" type="password" id="liPass" placeholder="Password">
+        <select class="field"                 id="liRoom">
+            <option value="">Loading rooms …</option>
+        </select>
+
+        <button class="btn-primary" id="btnLogin" onclick="doLogin()">
+            Start Monitoring Session
+        </button>
+
+        <div id="loginErr" style="color:var(--c-red);margin-top:12px;font-size:13px;display:none"></div>
+    </div>
+</div>
+
+<!-- ══════════════ DASHBOARD ══════════════ -->
+<div class="page" id="dashPage">
+
+    <!-- Topbar -->
+    <div class="topbar">
+        <div style="font-weight:800;font-size:19px">
+            Truth<span style="color:var(--c-cyan)">Lens</span>
+        </div>
+        <div style="width:1px;height:24px;background:var(--c-border)"></div>
+        <div>
+            <div id="tbRoom" style="font-weight:600;font-size:14px">—</div>
+            <div id="tbMeta" style="font-size:11px;color:var(--c-muted)">Session active</div>
+        </div>
+        <div style="flex:1"></div>
+        <div id="tbTimer">00:00:00</div>
+        <div id="tbFps" style="font-family:'DM Mono',monospace;font-size:13px;color:var(--c-muted)">0 FPS</div>
+        <div id="tbBadge" class="badge badge-ok">CLEAR</div>
+        <button onclick="endSession()"
+                style="padding:7px 14px;background:transparent;border:1px solid var(--c-red);
+                       color:var(--c-red);border-radius:6px;cursor:pointer;font-size:13px">
+            End Session
+        </button>
+    </div>
+
+    <!-- Body -->
+    <div class="main-layout">
+
+        <!-- Video -->
+        <div class="video-area">
+            <div id="vidOff">
+                <div style="font-size:64px;opacity:.15">📷</div>
+                <p style="margin-top:8px">Camera Offline</p>
+                <p style="font-size:12px;margin-top:4px">Press "Start Detection" →</p>
+            </div>
+            <img id="vidFeed" alt="Live Feed">
+        </div>
+
+        <!-- Side -->
+        <div class="side">
+
+            <!-- Controls -->
+            <div class="side-section">
+                <div class="side-label">Controls</div>
+                <button class="btn-ctrl btn-start" id="btnStart" onclick="startDetection()">
+                    ▶ Start Detection
+                </button>
+                <button class="btn-ctrl btn-stop" id="btnStop" onclick="stopDetection()" disabled>
+                    ■ Stop Detection
+                </button>
+            </div>
+
+            <!-- Stats — matches all 6 violation types from detector_Final.py -->
+            <div class="side-section">
+                <div class="side-label">Session Stats</div>
+
+                <div class="stat-row">
+                    <span>Tracked</span>
+                    <span class="stat-val" id="ssTracked" style="color:var(--c-cyan)">0</span>
+                </div>
+                <div class="stat-row viol-tot">
+                    <span>Total Violations</span>
+                    <span class="stat-val" id="ssViol">0</span>
+                </div>
+                <div style="height:6px"></div>
+
+                <div class="stat-row viol-bp">
+                    <span>Bad Posture</span>
+                    <span class="stat-val" id="ssBP">0</span>
+                </div>
+                <div class="stat-row viol-cp">
+                    <span>Copying</span>
+                    <span class="stat-val" id="ssCP">0</span>
+                </div>
+                <div class="stat-row viol-ph">
+                    <span>Phone Use</span>
+                    <span class="stat-val" id="ssPU">0</span>
+                </div>
+                <div class="stat-row viol-ph">
+                    <span>Phone Found</span>
+                    <span class="stat-val" id="ssPF">0</span>
+                </div>
+                <div class="stat-row viol-ps">
+                    <span>Paper Switch</span>
+                    <span class="stat-val" id="ssPS">0</span>
+                </div>
+                <div class="stat-row viol-rs">
+                    <span>Restless</span>
+                    <span class="stat-val" id="ssRS">0</span>
+                </div>
+            </div>
+
+            <!-- Events log -->
+            <div class="side-section" style="padding-bottom:8px">
+                <div class="side-label">Live Events</div>
+            </div>
+            <div class="events-log" id="eventsLog">
+                <div style="color:var(--c-muted);font-size:12px;padding:8px">No events yet.</div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+    <strong style="color:var(--c-red)">⚠ Violation</strong><br>
+    <span id="toastBody"></span>
+</div>
+
+<!-- ══════════════ SCRIPTS ══════════════ -->
+<script>
+// ── Hardcoded Pi IP — change if IP changes ──────────────────────────────────
+const API = window.location.origin;
+
+let pollingTimer   = null;
+let timerInterval  = null;
+let knownEventIds  = new Set();
+let toastTimer     = null;
+let sessionStart   = null;   // epoch seconds from backend
+let lastHazardTime = 0;      // تثبيت الـ ALERT لمدة 3 ثواني بعد آخر حادثة
+
+// ─────────────────────────────────────────
+//  ROOMS
+// ─────────────────────────────────────────
+async function loadRooms() {
+    const sel = document.getElementById("liRoom");
+    try {
+        const res = await fetch(API + "/api/rooms", { signal: AbortSignal.timeout(4000) });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const rooms = await res.json();
+        if (!rooms || rooms.length === 0) throw new Error("Empty rooms list");
+        sel.innerHTML = "<option value=''>Select Room …</option>";
+        rooms.forEach(r => {
+            const opt       = document.createElement("option");
+            opt.value       = r.id;
+            opt.textContent = r.code + " — " + r.name;
+            sel.appendChild(opt);
+        });
+    } catch(e) {
+        sel.innerHTML = "<option value=''>⚠ Server unreachable — check Pi IP</option>";
+        const errEl = document.getElementById("loginErr");
+        errEl.textContent = "Cannot reach server at: " + API + " — Is detector.py running?";
+        errEl.style.display = "block";
+        console.error("loadRooms failed:", e);
+    }
+}
+
+// ─────────────────────────────────────────
+//  LOGIN  (frontend-only auth for now)
+// ─────────────────────────────────────────
+function doLogin() {
+    const user   = document.getElementById("liUser").value.trim();
+    const pass   = document.getElementById("liPass").value;
+    const roomId = document.getElementById("liRoom").value;
+    const errEl  = document.getElementById("loginErr");
+
+    if (!user || !pass || !roomId) {
+        errEl.textContent   = "Please fill in all fields.";
+        errEl.style.display = "block";
+        return;
+    }
+    errEl.style.display = "none";
+
+    const roomName = document.getElementById("liRoom").selectedOptions[0].textContent;
+    document.getElementById("tbRoom").textContent = roomName;
+
+    document.getElementById("loginPage").classList.remove("active");
+    document.getElementById("dashPage").classList.add("active");
+}
+
+// ─────────────────────────────────────────
+//  DETECTION
+// ─────────────────────────────────────────
+async function startDetection() {
+    knownEventIds  = new Set();   // reset event dedup
+    lastHazardTime = 0;
+
+    try {
+        stopPolling();
+        stopTimer();
+        const res = await fetch(API + "/api/start", { method: "POST" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+
+        const vid          = document.getElementById("vidFeed");
+        vid.src            = API + "/video_feed?t=" + Date.now();
+        vid.style.display  = "block";
+        document.getElementById("vidOff").style.display = "none";
+
+        document.getElementById("btnStart").disabled = true;
+        document.getElementById("btnStop").disabled  = false;
+
+        startPolling();
+        startTimer();
+    } catch(e) {
+        alert("Cannot connect to server.\nMake sure detector_Final.py is running on the Pi.\n\n" + e);
+    }
+}
+
+async function stopDetection() {
+    try { await fetch(API + "/api/stop", { method: "POST" }); } catch(_) {}
+
+    document.getElementById("vidFeed").style.display = "none";
+    document.getElementById("vidFeed").src           = "";
+    document.getElementById("vidOff").style.display  = "block";
+    document.getElementById("btnStart").disabled     = false;
+    document.getElementById("btnStop").disabled      = true;
+
+    stopPolling();
+    stopTimer();
+}
+
+function endSession() {
+    if (!confirm("End this monitoring session?")) return;
+    stopDetection();
+    document.getElementById("dashPage").classList.remove("active");
+    document.getElementById("loginPage").classList.add("active");
+    resetStats();
+}
+
+// ─────────────────────────────────────────
+//  SESSION TIMER (runs client-side)
+// ─────────────────────────────────────────
+function startTimer() {
+    sessionStart  = Date.now();
+    timerInterval = setInterval(tickTimer, 1000);
+    tickTimer();
+}
+
+function stopTimer() {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    document.getElementById("tbTimer").textContent = "00:00:00";
+}
+
+function tickTimer() {
+    if (!sessionStart) return;
+    const elapsed = Math.floor((Date.now() - sessionStart) / 1000);
+    const h = String(Math.floor(elapsed / 3600)).padStart(2, "0");
+    const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, "0");
+    const s = String(elapsed % 60).padStart(2, "0");
+    document.getElementById("tbTimer").textContent = `${h}:${m}:${s}`;
+}
+
+// ─────────────────────────────────────────
+//  POLLING
+// ─────────────────────────────────────────
+function startPolling() {
+    if (pollingTimer) return;
+    pollingTimer = setInterval(pollStatus, 1000);
+}
+
+function stopPolling() {
+    clearInterval(pollingTimer);
+    pollingTimer = null;
+}
+
+async function pollStatus() {
+    try {
+        const res  = await fetch(API + "/api/status");
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // ── FPS ──────────────────────────────────────────────────────
+        document.getElementById("tbFps").textContent = (data.fps || 0) + " FPS";
+
+        // ── Tracked ──────────────────────────────────────────────────
+        document.getElementById("ssTracked").textContent = data.num_detected || 0;
+
+        // ── Violations — all 6 types matching detector_Final.py ──────
+        const s = data.stats || {};
+        document.getElementById("ssViol").textContent = data.total_violations || 0;
+        document.getElementById("ssBP").textContent   = s.bad_posture  || 0;
+        document.getElementById("ssCP").textContent   = s.copying      || 0;
+        document.getElementById("ssPU").textContent   = s.phone_use    || 0;   // ← split
+        document.getElementById("ssPF").textContent   = s.phone_found  || 0;   // ← split
+        document.getElementById("ssPS").textContent   = s.paper_switch || 0;
+        document.getElementById("ssRS").textContent   = s.restless     || 0;
+
+        // ── Badge — sticky for 3s after last hazard ──────────────────
+        const badge = document.getElementById("tbBadge");
+        if (data.any_hazard) {
+            lastHazardTime = Date.now();
+        }
+        const hazardActive = (Date.now() - lastHazardTime) < 3000;
+
+        if (hazardActive) {
+            badge.textContent = "ALERT";
+            badge.className   = "badge badge-err";
+        } else {
+            badge.textContent = "CLEAR";
+            badge.className   = "badge badge-ok";
+        }
+
+        // ── Events ───────────────────────────────────────────────────
+        renderEvents(data.rt_events || []);
+
+    } catch(e) {
+        console.warn("pollStatus:", e);
+    }
+}
+
+// ─────────────────────────────────────────
+//  EVENTS LOG
+// ─────────────────────────────────────────
+function renderEvents(events) {
+    const logEl  = document.getElementById("eventsLog");
+    const newOnes = events.filter(e => !knownEventIds.has(e.id));
+    if (newOnes.length === 0) return;
+
+    if (knownEventIds.size === 0) logEl.innerHTML = "";  // clear placeholder
+
+    newOnes.forEach(ev => {
+        knownEventIds.add(ev.id);
+
+        const div       = document.createElement("div");
+        div.className   = "event-item";
+        div.innerHTML   = `
+            <span class="event-time">${ev.timestamp}</span>
+            <span class="event-id"> ${ev.track_id}</span>
+            <span class="event-viol"> — ${ev.violation}</span>
+        `;
+        logEl.prepend(div);
+        showToast(`${ev.track_id}: ${ev.violation}`);
+    });
+
+    // Keep max 50 items in DOM
+    while (logEl.children.length > 50) {
+        logEl.removeChild(logEl.lastChild);
+    }
+}
+
+// ─────────────────────────────────────────
+//  TOAST
+// ─────────────────────────────────────────
+function showToast(msg) {
+    const t = document.getElementById("toast");
+    document.getElementById("toastBody").textContent = msg;
+    t.style.display = "block";
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.style.display = "none"; }, 3500);
+}
+
+// ─────────────────────────────────────────
+//  RESET STATS (on end session)
+// ─────────────────────────────────────────
+function resetStats() {
+    ["ssTracked","ssViol","ssBP","ssCP","ssPU","ssPF","ssPS","ssRS"].forEach(id => {
+        document.getElementById(id).textContent = "0";
+    });
+    document.getElementById("eventsLog").innerHTML =
+        '<div style="color:var(--c-muted);font-size:12px;padding:8px">No events yet.</div>';
+    document.getElementById("tbBadge").textContent = "CLEAR";
+    document.getElementById("tbBadge").className   = "badge badge-ok";
+    document.getElementById("tbTimer").textContent = "00:00:00";
+    knownEventIds  = new Set();
+    lastHazardTime = 0;
+}
+
+// ─────────────────────────────────────────
+//  BOOTSTRAP
+// ─────────────────────────────────────────
+loadRooms();
+</script>
+</body>
+</html>
