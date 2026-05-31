@@ -1,0 +1,22 @@
+[Unit]
+Description=TruthLens Pro Raspberry Pi 5 detector
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+SupplementaryGroups=video
+WorkingDirectory=/opt/truthlens-pro
+EnvironmentFile=/etc/default/truthlens-pro
+ExecStart=/opt/truthlens-pro/.venv/bin/python /opt/truthlens-pro/detector_Final_6th_time.py
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+KillSignal=SIGINT
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

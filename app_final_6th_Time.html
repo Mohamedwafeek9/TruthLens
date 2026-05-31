@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TruthLens Pro - 6th Time</title>
+  <style>
+    :root {
+      --ink: #e7eef6;
+      --muted: #8ea0b3;
+      --panel: #15191f;
+      --panel-2: #1c232b;
+      --line: #303b45;
+      --field: #0d1116;
+      --good: #39c27f;
+      --warn: #f2ad4b;
+      --bad: #ef5656;
+      --cyan: #50c7df;
+      --blue: #5177d9;
+      --bg: #080b0f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      overflow: hidden;
+    }
+    button, input, select { font: inherit; }
+    button {
+      border: 0;
+      color: inherit;
+      background: var(--panel-2);
+      cursor: pointer;
+    }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .screen { display: none; min-height: 100vh; }
+    .screen.active { display: flex; }
+    .login-screen {
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background:
+        linear-gradient(135deg, rgba(80, 199, 223, .12), transparent 36%),
+        linear-gradient(315deg, rgba(81, 119, 217, .16), transparent 38%),
+        #080b0f;
+    }
+    .login-box {
+      width: min(420px, 100%);
+      border: 1px solid var(--line);
+      background: rgba(21, 25, 31, .96);
+      padding: 28px;
+      border-radius: 8px;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, .42);
+    }
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .brand strong { font-size: 28px; letter-spacing: 0; }
+    .brand span { color: var(--cyan); font-weight: 800; }
+    .hint { color: var(--muted); margin: 0 0 24px; }
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .field input, .field select {
+      width: 100%;
+      color: var(--ink);
+      background: var(--field);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+      outline: none;
+    }
+    .field input:focus, .field select:focus { border-color: var(--cyan); }
+    .primary {
+      width: 100%;
+      padding: 13px 14px;
+      border-radius: 6px;
+      background: linear-gradient(90deg, var(--blue), var(--cyan));
+      font-weight: 800;
+    }
+    .error {
+      min-height: 22px;
+      margin-top: 12px;
+      color: var(--bad);
+      font-size: 14px;
+    }
+    .dashboard { flex-direction: column; height: 100vh; }
+    .topbar {
+      height: 62px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 18px;
+      background: #10151b;
+      border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+    .topbar .title {
+      font-weight: 850;
+      font-size: 20px;
+      white-space: nowrap;
+    }
+    .room { min-width: 180px; }
+    .room strong { display: block; font-size: 14px; }
+    .room span { display: block; color: var(--muted); font-size: 12px; }
+    .spacer { flex: 1; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      height: 30px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--muted);
+      white-space: nowrap;
+      font-size: 13px;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 99px;
+      background: var(--muted);
+    }
+    .chip.good .dot { background: var(--good); }
+    .chip.warn .dot { background: var(--warn); }
+    .chip.bad .dot { background: var(--bad); }
+    .chip.good { color: #bdf4d8; }
+    .chip.warn { color: #ffe0ac; }
+    .chip.bad { color: #ffc2c2; }
+    .ghost {
+      height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: transparent;
+    }
+    .main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      flex: 1;
+      min-height: 0;
+    }
+    .video-shell {
+      position: relative;
+      min-width: 0;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #videoFeed {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: none;
+    }
+    .video-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      text-align: center;
+      padding: 30px;
+      pointer-events: none;
+      background: radial-gradient(circle at center, rgba(255,255,255,.04), transparent 45%);
+    }
+    .video-overlay strong { display: block; color: var(--ink); margin-bottom: 6px; font-size: 18px; }
+    .side {
+      border-left: 1px solid var(--line);
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .metric {
+      background: var(--panel);
+      padding: 16px;
+      min-width: 0;
+    }
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      margin-bottom: 7px;
+    }
+    .metric strong { font-size: 28px; letter-spacing: 0; }
+    .panel-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .panel-section h2 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: 0;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 0;
+      color: var(--muted);
+      border-bottom: 1px solid rgba(255,255,255,.05);
+    }
+    .stat-row:last-child { border-bottom: 0; }
+    .stat-row strong { color: var(--ink); }
+    .events {
+      flex: 1;
+      overflow: auto;
+      min-height: 0;
+    }
+    .event {
+      display: grid;
+      grid-template-columns: 64px 62px 1fr;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      font-size: 13px;
+    }
+    .event time, .event span { color: var(--muted); }
+    .event strong { color: #ffd1d1; min-width: 0; overflow-wrap: anywhere; }
+    .empty {
+      padding: 18px 16px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    @media (max-width: 920px) {
+      body { overflow: auto; }
+      .dashboard { height: auto; min-height: 100vh; }
+      .topbar { height: auto; min-height: 62px; flex-wrap: wrap; padding: 12px; }
+      .main { grid-template-columns: 1fr; }
+      .video-shell { min-height: 52vh; }
+      .side { border-left: 0; border-top: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+  <main id="loginScreen" class="screen login-screen active">
+    <form id="loginForm" class="login-box">
+      <div class="brand"><strong>TruthLens</strong><span>PRO</span></div>
+      <p class="hint" style="margin-top:-2px">6th Time production build</p>
+      <p class="hint">Secure exam monitoring console</p>
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <div class="field">
+        <label for="room">Room</label>
+        <select id="room" name="room" required></select>
+      </div>
+      <button class="primary" type="submit">Start monitoring</button>
+      <div id="loginError" class="error"></div>
+    </form>
+  </main>
+
+  <main id="dashboard" class="screen dashboard">
+    <header class="topbar">
+      <div class="title">TruthLens <span style="color:var(--cyan)">PRO</span> <span style="color:var(--muted);font-size:13px">6th Time</span></div>
+      <div class="room">
+        <strong id="roomName">Room</strong>
+        <span id="operatorName">Not signed in</span>
+      </div>
+      <div class="spacer"></div>
+      <div id="cameraChip" class="chip warn"><span class="dot"></span><span>Camera starting</span></div>
+      <div id="detectChip" class="chip warn"><span class="dot"></span><span>Detection idle</span></div>
+      <div id="connChip" class="chip warn"><span class="dot"></span><span>Connecting</span></div>
+      <button id="logoutBtn" class="ghost" type="button">Logout</button>
+    </header>
+
+    <section class="main">
+      <div class="video-shell">
+        <img id="videoFeed" alt="Live monitoring feed">
+        <div id="videoOverlay" class="video-overlay">
+          <div><strong>Waiting for stream</strong><span id="videoMessage">Connecting to TruthLens Pro</span></div>
+        </div>
+      </div>
+      <aside class="side">
+        <div class="metrics">
+          <div class="metric"><span>FPS</span><strong id="fps">0.0</strong></div>
+          <div class="metric"><span>Tracked</span><strong id="tracked">0</strong></div>
+          <div class="metric"><span>Violations</span><strong id="violations">0</strong></div>
+          <div class="metric"><span>Hazard</span><strong id="hazard">Clear</strong></div>
+        </div>
+        <div class="panel-section">
+          <h2>Breakdown</h2>
+          <div id="stats"></div>
+        </div>
+        <div class="panel-section" style="border-bottom:0">
+          <h2>Live Events</h2>
+        </div>
+        <div id="events" class="events"></div>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      statusTimer: null,
+      reconnectTimer: null,
+      reconnectDelay: 1000,
+      lastEventId: 0,
+      authenticated: false
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        credentials: "same-origin",
+        headers: {"Content-Type": "application/json", ...(options.headers || {})},
+        ...options
+      });
+      if (response.status === 401) {
+        showLogin();
+        throw new Error("Unauthorized");
+      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Request failed");
+      return data;
+    }
+
+    function setChip(id, status, text) {
+      const el = $(id);
+      el.className = `chip ${status}`;
+      el.querySelector("span:last-child").textContent = text;
+    }
+
+    function showLogin() {
+      state.authenticated = false;
+      $("dashboard").classList.remove("active");
+      $("loginScreen").classList.add("active");
+      stopStatusPolling();
+      stopVideo();
+    }
+
+    function showDashboard(user) {
+      state.authenticated = true;
+      $("loginScreen").classList.remove("active");
+      $("dashboard").classList.add("active");
+      const room = user.room || {};
+      $("roomName").textContent = room.code ? `${room.code} - ${room.name}` : "Room";
+      $("operatorName").textContent = `${user.name} (${user.role})`;
+      startStatusPolling();
+      startVideo();
+    }
+
+    async function loadRooms() {
+      const rooms = await api("/api/rooms", {headers: {}});
+      $("room").innerHTML = "";
+      rooms.forEach((room) => {
+        const option = document.createElement("option");
+        option.value = room.id;
+        option.textContent = `${room.code} - ${room.name}`;
+        $("room").appendChild(option);
+      });
+    }
+
+    async function restoreSession() {
+      try {
+        const data = await api("/api/session", {headers: {}});
+        showDashboard(data.user);
+        renderStatus(data.status);
+      } catch (_) {
+        showLogin();
+      }
+    }
+
+    $("loginForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      $("loginError").textContent = "";
+      try {
+        const data = await api("/api/login", {
+          method: "POST",
+          body: JSON.stringify({
+            username: $("username").value.trim(),
+            password: $("password").value,
+            room_id: $("room").value
+          })
+        });
+        showDashboard(data.user);
+        renderStatus(data.status);
+      } catch (error) {
+        $("loginError").textContent = error.message;
+      }
+    });
+
+    $("logoutBtn").addEventListener("click", async () => {
+      try { await api("/api/logout", {method: "POST", body: "{}"}); } catch (_) {}
+      showLogin();
+    });
+
+    function startStatusPolling() {
+      stopStatusPolling();
+      const tick = async () => {
+        if (!state.authenticated) return;
+        try {
+          const status = await api("/api/status", {headers: {}});
+          renderStatus(status);
+          setChip("connChip", "good", "Connected");
+        } catch (error) {
+          if (state.authenticated) setChip("connChip", "bad", "Connection lost");
+        }
+      };
+      tick();
+      state.statusTimer = setInterval(tick, 1000);
+    }
+
+    function stopStatusPolling() {
+      if (state.statusTimer) clearInterval(state.statusTimer);
+      state.statusTimer = null;
+    }
+
+    function startVideo() {
+      stopVideo();
+      const img = $("videoFeed");
+      img.onload = () => {
+        state.reconnectDelay = 1000;
+        img.style.display = "block";
+        $("videoOverlay").style.display = "none";
+      };
+      img.onerror = () => {
+        $("videoFeed").style.display = "none";
+        $("videoOverlay").style.display = "flex";
+        $("videoMessage").textContent = "Reconnecting to live stream";
+        scheduleVideoReconnect();
+      };
+      img.src = `/video_feed?t=${Date.now()}`;
+    }
+
+    function stopVideo() {
+      if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
+      state.reconnectTimer = null;
+      $("videoFeed").removeAttribute("src");
+      $("videoFeed").style.display = "none";
+      $("videoOverlay").style.display = "flex";
+    }
+
+    function scheduleVideoReconnect() {
+      if (!state.authenticated || state.reconnectTimer) return;
+      state.reconnectTimer = setTimeout(() => {
+        state.reconnectTimer = null;
+        $("videoFeed").src = `/video_feed?t=${Date.now()}`;
+        state.reconnectDelay = Math.min(10000, state.reconnectDelay * 1.6);
+      }, state.reconnectDelay);
+    }
+
+    function renderStatus(status) {
+      $("fps").textContent = Number(status.fps || 0).toFixed(1);
+      $("tracked").textContent = status.num_detected || 0;
+      $("violations").textContent = status.total_violations || 0;
+      $("hazard").textContent = status.any_hazard ? "Active" : "Clear";
+      $("hazard").style.color = status.any_hazard ? "var(--bad)" : "var(--good)";
+
+      setChip("cameraChip", status.camera_online ? "good" : "bad", status.camera_online ? "Camera online" : "Camera offline");
+      setChip("detectChip", status.running ? "good" : "warn", status.running ? "Detection running" : "Detection idle");
+
+      if (status.camera_error || status.detector_error) {
+        $("videoOverlay").style.display = "flex";
+        $("videoMessage").textContent = status.camera_error || status.detector_error;
+      }
+
+      const stats = status.stats || {};
+      $("stats").innerHTML = Object.entries(stats).map(([key, value]) => {
+        const label = key.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        return `<div class="stat-row"><span>${label}</span><strong>${value}</strong></div>`;
+      }).join("");
+
+      const events = status.rt_events || [];
+      if (!events.length) {
+        $("events").innerHTML = `<div class="empty">No violations recorded.</div>`;
+        return;
+      }
+      $("events").innerHTML = events.slice(0, 80).map((event) => {
+        return `<div class="event"><time>${event.timestamp}</time><span>${event.track_id}</span><strong>${event.violation}</strong></div>`;
+      }).join("");
+    }
+
+    loadRooms().then(restoreSession).catch((error) => {
+      $("loginError").textContent = error.message;
+    });
+  </script>
+</body>
+</html>
