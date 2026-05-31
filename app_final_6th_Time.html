@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TruthLens Pro - 6th Time</title>
+  <title>TruthLens Pro</title>
   <style>
     :root {
       --ink: #e7eef6;
@@ -262,7 +262,7 @@
   <main id="loginScreen" class="screen login-screen active">
     <form id="loginForm" class="login-box">
       <div class="brand"><strong>TruthLens</strong><span>PRO</span></div>
-      <p class="hint" style="margin-top:-2px">6th Time production build</p>
+      <p class="hint" style="margin-top:-2px">Exam monitoring console</p>
       <p class="hint">Secure exam monitoring console</p>
       <div class="field">
         <label for="username">Username</label>
@@ -283,7 +283,7 @@
 
   <main id="dashboard" class="screen dashboard">
     <header class="topbar">
-      <div class="title">TruthLens <span style="color:var(--cyan)">PRO</span> <span style="color:var(--muted);font-size:13px">6th Time</span></div>
+      <div class="title">TruthLens <span style="color:var(--cyan)">PRO</span></div>
       <div class="room">
         <strong id="roomName">Room</strong>
         <span id="operatorName">Not signed in</span>
@@ -292,6 +292,8 @@
       <div id="cameraChip" class="chip warn"><span class="dot"></span><span>Camera starting</span></div>
       <div id="detectChip" class="chip warn"><span class="dot"></span><span>Detection idle</span></div>
       <div id="connChip" class="chip warn"><span class="dot"></span><span>Connecting</span></div>
+      <button id="startBtn" class="ghost" type="button">Start</button>
+      <button id="stopBtn" class="ghost" type="button">Stop</button>
       <button id="logoutBtn" class="ghost" type="button">Logout</button>
     </header>
 
@@ -415,6 +417,14 @@
     $("logoutBtn").addEventListener("click", async () => {
       try { await api("/api/logout", {method: "POST", body: "{}"}); } catch (_) {}
       showLogin();
+    });
+
+    document.getElementById("startBtn").addEventListener("click", async () => {
+      try { await api("/api/start", { method: "POST", body: "{}" }); } catch (e) { console.warn(e); }
+    });
+
+    document.getElementById("stopBtn").addEventListener("click", async () => {
+      try { await api("/api/stop", { method: "POST", body: "{}" }); } catch (e) { console.warn(e); }
     });
 
     function startStatusPolling() {
