@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TruthLens Pro</title>
+  <style>
+    :root {
+      --ink: #e7eef6;
+      --muted: #8ea0b3;
+      --panel: #15191f;
+      --panel-2: #1c232b;
+      --line: #303b45;
+      --field: #0d1116;
+      --good: #39c27f;
+      --warn: #f2ad4b;
+      --bad: #ef5656;
+      --cyan: #50c7df;
+      --blue: #5177d9;
+      --bg: #080b0f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      overflow: hidden;
+    }
+    button, input, select { font: inherit; }
+    button {
+      border: 0;
+      color: inherit;
+      background: var(--panel-2);
+      cursor: pointer;
+    }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .screen { display: none; min-height: 100vh; }
+    .screen.active { display: flex; }
+    .login-screen {
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background:
+        linear-gradient(135deg, rgba(80, 199, 223, .12), transparent 36%),
+        linear-gradient(315deg, rgba(81, 119, 217, .16), transparent 38%),
+        #080b0f;
+    }
+    .login-box {
+      width: min(420px, 100%);
+      border: 1px solid var(--line);
+      background: rgba(21, 25, 31, .96);
+      padding: 28px;
+      border-radius: 8px;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, .42);
+    }
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .brand strong { font-size: 28px; letter-spacing: 0; }
+    .brand span { color: var(--cyan); font-weight: 800; }
+    .hint { color: var(--muted); margin: 0 0 24px; }
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .field input, .field select {
+      width: 100%;
+      color: var(--ink);
+      background: var(--field);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+      outline: none;
+    }
+    .field input:focus, .field select:focus { border-color: var(--cyan); }
+    .primary {
+      width: 100%;
+      padding: 13px 14px;
+      border-radius: 6px;
+      background: linear-gradient(90deg, var(--blue), var(--cyan));
+      font-weight: 800;
+    }
+    .error {
+      min-height: 22px;
+      margin-top: 12px;
+      color: var(--bad);
+      font-size: 14px;
+    }
+    .dashboard { flex-direction: column; height: 100vh; }
+    .topbar {
+      height: 62px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 18px;
+      background: #10151b;
+      border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+    .topbar .title {
+      font-weight: 850;
+      font-size: 20px;
+      white-space: nowrap;
+    }
+    .room { min-width: 180px; }
+    .room strong { display: block; font-size: 14px; }
+    .room span { display: block; color: var(--muted); font-size: 12px; }
+    .spacer { flex: 1; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      height: 30px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--muted);
+      white-space: nowrap;
+      font-size: 13px;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 99px;
+      background: var(--muted);
+    }
+    .chip.good .dot { background: var(--good); }
+    .chip.warn .dot { background: var(--warn); }
+    .chip.bad .dot { background: var(--bad); }
+    .chip.good { color: #bdf4d8; }
+    .chip.warn { color: #ffe0ac; }
+    .chip.bad { color: #ffc2c2; }
+    .ghost {
+      height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: transparent;
+    }
+    .alert-badge {
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: #c8f7df;
+      background: rgba(57, 194, 127, .12);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .04em;
+    }
+    .alert-badge.firing {
+      color: #ffd5d5;
+      border-color: var(--bad);
+      background: rgba(239, 86, 86, .16);
+      animation: pulse 1.25s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(239, 86, 86, .36); }
+      70% { box-shadow: 0 0 0 12px rgba(239, 86, 86, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 86, 86, 0); }
+    }
+    .main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      flex: 1;
+      min-height: 0;
+    }
+    .video-shell {
+      position: relative;
+      min-width: 0;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #videoFeed {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: none;
+    }
+    .video-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      text-align: center;
+      padding: 30px;
+      pointer-events: none;
+      background: radial-gradient(circle at center, rgba(255,255,255,.04), transparent 45%);
+    }
+    .video-overlay strong { display: block; color: var(--ink); margin-bottom: 6px; font-size: 18px; }
+    .side {
+      border-left: 1px solid var(--line);
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .metric {
+      background: var(--panel);
+      padding: 16px;
+      min-width: 0;
+    }
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      margin-bottom: 7px;
+    }
+    .metric strong { font-size: 28px; letter-spacing: 0; }
+    .panel-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .panel-section h2 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: 0;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 0;
+      color: var(--muted);
+      border-bottom: 1px solid rgba(255,255,255,.05);
+    }
+    .stat-row:last-child { border-bottom: 0; }
+    .stat-row strong { color: var(--ink); }
+    .events {
+      flex: 1;
+      overflow: auto;
+      min-height: 0;
+    }
+    .event {
+      display: grid;
+      grid-template-columns: 64px 62px 1fr;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      font-size: 13px;
+    }
+    .event time, .event span { color: var(--muted); }
+    .event strong { color: #ffd1d1; min-width: 0; overflow-wrap: anywhere; }
+    .empty {
+      padding: 18px 16px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .toast {
+      position: fixed;
+      top: 78px;
+      right: 18px;
+      z-index: 30;
+      min-width: 280px;
+      max-width: min(360px, calc(100vw - 36px));
+      display: none;
+      padding: 14px 16px;
+      border: 1px solid rgba(239, 86, 86, .55);
+      border-left: 4px solid var(--bad);
+      border-radius: 8px;
+      background: rgba(21, 25, 31, .98);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, .45);
+    }
+    .toast.show { display: block; }
+    .toast strong { display: block; margin-bottom: 4px; }
+    .toast span { color: var(--muted); font-size: 14px; }
+    .toast.error {
+      border-color: rgba(242, 173, 75, .6);
+      border-left-color: var(--warn);
+    }
+    @media (max-width: 920px) {
+      body { overflow: auto; }
+      .dashboard { height: auto; min-height: 100vh; }
+      .topbar { height: auto; min-height: 62px; flex-wrap: wrap; padding: 12px; }
+      .main { grid-template-columns: 1fr; }
+      .video-shell { min-height: 52vh; }
+      .side { border-left: 0; border-top: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+  <main id="loginScreen" class="screen login-screen active">
+    <form id="loginForm" class="login-box">
+      <div class="brand"><strong>TruthLens</strong><span>PRO</span></div>
+      <p class="hint" style="margin-top:-2px">Secure exam monitoring console</p>
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <div class="field">
+        <label for="room">Room</label>
+        <select id="room" name="room" required></select>
+      </div>
+      <button class="primary" type="submit">Start monitoring</button>
+      <div id="loginErr" class="error"></div>
+    </form>
+  </main>
+
+  <main id="dashboard" class="screen dashboard">
+    <header class="topbar">
+      <div class="title">TruthLens <span style="color:var(--cyan)">PRO</span></div>
+      <div class="room">
+        <strong id="roomName">Room</strong>
+        <span id="operatorName">Not signed in</span>
+      </div>
+      <div class="spacer"></div>
+      <div id="cameraChip" class="chip warn"><span class="dot"></span><span>Camera starting</span></div>
+      <div id="detectChip" class="chip warn"><span class="dot"></span><span>Detection idle</span></div>
+      <div id="connChip" class="chip warn"><span class="dot"></span><span>Connecting</span></div>
+      <div id="alertBadge" class="alert-badge">CLEAR</div>
+      <button id="startBtn" class="ghost" type="button">Start</button>
+      <button id="stopBtn" class="ghost" type="button">Stop</button>
+      <button id="logoutBtn" class="ghost" type="button">End Session</button>
+    </header>
+
+    <section class="main">
+      <div class="video-shell">
+        <img id="videoFeed" alt="Live monitoring feed">
+        <div id="videoOverlay" class="video-overlay">
+          <div><strong>Waiting for stream</strong><span id="videoMessage">Connecting to TruthLens Pro</span></div>
+        </div>
+      </div>
+      <aside class="side">
+        <div class="metrics">
+          <div class="metric"><span>FPS</span><strong id="tbFps">0.0 FPS</strong></div>
+          <div class="metric"><span>Tracked</span><strong id="ssTracked">0</strong></div>
+          <div class="metric"><span>Violations</span><strong id="ssViol">0</strong></div>
+          <div class="metric"><span>Hazard</span><strong id="hazard">Clear</strong></div>
+        </div>
+        <div class="panel-section">
+          <h2>Breakdown</h2>
+          <div id="stats"></div>
+        </div>
+        <div class="panel-section" style="border-bottom:0">
+          <h2>Live Events</h2>
+        </div>
+        <div id="events" class="events"></div>
+      </aside>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite">
+    <strong id="toastTitle">Violation Detected</strong>
+    <span id="toastBody"></span>
+  </div>
+
+  <script>
+    const state = {
+      statusTimer: null,
+      reconnectTimer: null,
+      toastTimer: null,
+      reconnectDelay: 1000,
+      lastEventId: 0,
+      authenticated: false,
+      videoActive: false,
+      videoLoaded: false,
+      userRole: null
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    // FIX (Critical - HTTPS Downgrade): previously this rewrote
+    // https:// origins to http://, which forces every fetch() call to a
+    // mixed-content request when the page itself is served over TLS.
+    // Browsers block mixed content outright, silently breaking every
+    // API call and the video feed. Same-origin requests must keep
+    // whatever protocol actually served the page. The file:// fallback
+    // (only relevant when testing the HTML standalone, off the Flask
+    // server, e.g. on a Windows dev machine before deploying to the Pi)
+    // is unaffected and still points at localhost for local dev.
+    const API_BASE = window.location.protocol === "file:"
+      ? "http://localhost:5050"
+      : window.location.origin;
+    const FETCH_CREDENTIALS = window.location.protocol === "file:" ? "omit" : "same-origin";
+
+    function apiUrl(path) {
+      return `${API_BASE}${path}`;
+    }
+
+    async function api(path, options = {}) {
+      const headers = options.body
+        ? {"Content-Type": "application/json", ...(options.headers || {})}
+        : (options.headers || {});
+      const response = await fetch(apiUrl(path), {
+        credentials: FETCH_CREDENTIALS,
+        headers,
+        ...options
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401 && path !== "/api/login") {
+          showLogin();
+        }
+        const error = new Error(data.error || "Request failed");
+        error.status = response.status;
+        error.data = data;
+        throw error;
+      }
+      return data;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[char]));
+    }
+
+    function selectedRoom() {
+      const option = $("room").selectedOptions[0];
+      const text = option ? option.textContent : "Room";
+      const [code, ...nameParts] = text.split(" - ");
+      return {
+        id: $("room").value,
+        code: code || "Room",
+        name: nameParts.join(" - ") || text
+      };
+    }
+
+    function normalizeUser(data) {
+      const user = data.user || {name: data.name, role: data.role};
+      if (!user.room) {
+        user.room = selectedRoom();
+      }
+      return user;
+    }
+
+    function showToast(message, isError = false) {
+      $("toastTitle").textContent = isError ? "Attention" : "Violation Detected";
+      $("toastBody").textContent = message;
+      $("toast").classList.toggle("error", isError);
+      $("toast").classList.add("show");
+      if (state.toastTimer) clearTimeout(state.toastTimer);
+      state.toastTimer = setTimeout(() => {
+        $("toast").classList.remove("show");
+        state.toastTimer = null;
+      }, isError ? 6000 : 4000);
+    }
+
+    function showViolationToast(event) {
+      showToast(`Track ${event.track_id}: ${event.violation} at ${event.timestamp}`, false);
+    }
+
+    function hideToast() {
+      if (state.toastTimer) clearTimeout(state.toastTimer);
+      state.toastTimer = null;
+      $("toast").classList.remove("show");
+      $("toast").classList.remove("error");
+    }
+
+    function setAlertBadge(active) {
+      const badge = $("alertBadge");
+      badge.textContent = active ? "HAZARD" : "CLEAR";
+      badge.classList.toggle("firing", active);
+    }
+
+    function setButtons(running) {
+      $("startBtn").disabled = running;
+      $("stopBtn").disabled = !running || state.userRole !== "admin";
+    }
+
+    function resetDashboard() {
+      $("tbFps").textContent = "0.0 FPS";
+      $("ssTracked").textContent = "0";
+      $("ssViol").textContent = "0";
+      $("hazard").textContent = "Clear";
+      $("hazard").style.color = "var(--good)";
+      $("events").innerHTML = `<div class="empty">No violations recorded.</div>`;
+      setAlertBadge(false);
+      setButtons(false);
+      state.lastEventId = 0;
+    }
+
+    function setChip(id, status, text) {
+      const el = $(id);
+      el.className = `chip ${status}`;
+      el.querySelector("span:last-child").textContent = text;
+    }
+
+    function showLogin() {
+      state.authenticated = false;
+      state.userRole = null;
+      $("dashboard").classList.remove("active");
+      $("loginScreen").classList.add("active");
+      stopStatusPolling();
+      stopVideo();
+      hideToast();
+      resetDashboard();
+    }
+
+    function showDashboard(user) {
+      state.authenticated = true;
+      state.userRole = user.role;
+      $("loginScreen").classList.remove("active");
+      $("dashboard").classList.add("active");
+      const room = user.room || {};
+      $("roomName").textContent = room.code ? `${room.code} - ${room.name}` : "Room";
+      $("operatorName").textContent = `${user.name} (${user.role})`;
+      $("stopBtn").style.display = user.role === "admin" ? "" : "none";
+      startStatusPolling();
+      startVideo();
+    }
+
+    async function loadRooms() {
+      const rooms = await api("/api/rooms", {headers: {}});
+      $("room").innerHTML = "";
+      rooms.forEach((room) => {
+        const option = document.createElement("option");
+        option.value = room.id;
+        option.textContent = `${room.code} - ${room.name}`;
+        $("room").appendChild(option);
+      });
+    }
+
+    async function restoreSession() {
+      try {
+        const data = await api("/api/session", {headers: {}});
+        showDashboard(data.user);
+        renderStatus(data.status);
+      } catch (_) {
+        showLogin();
+      }
+    }
+
+    async function doLogin(event) {
+      event.preventDefault();
+      $("loginErr").textContent = "";
+      try {
+        const data = await api("/api/login", {
+          method: "POST",
+          body: JSON.stringify({
+            username: $("username").value.trim(),
+            password: $("password").value,
+            room_id: $("room").value
+          })
+        });
+        if (!data.ok) {
+          throw new Error(data.error || "Login failed");
+        }
+        showDashboard(normalizeUser(data));
+        renderStatus(data.status);
+      } catch (error) {
+        $("loginErr").textContent = error.message;
+      }
+    }
+
+    async function endSession() {
+      if (state.userRole === "admin") {
+        try { await api("/api/stop", {method: "POST", body: "{}"}); } catch (_) {}
+      }
+      try { await api("/api/logout", {method: "POST", body: "{}"}); } catch (_) {}
+      showLogin();
+    }
+
+    async function startDetection() {
+      try {
+        await api("/api/start", {method: "POST", body: "{}"});
+        startVideo();
+        setButtons(true);
+      } catch (error) {
+        console.warn(error);
+        showToast(error.message || "Failed to start detection", true);
+      }
+    }
+
+    // FIX (Medium - Silent Stop Failure): the backend can legitimately
+    // return 503 stop_failed if the detector worker doesn't join within
+    // its timeout (a documented failure mode, not hypothetical). The
+    // previous version caught that, logged it to a console nobody
+    // watches during an exam, then unconditionally called stopVideo()
+    // and setButtons(false) - showing an admin a "stopped" UI while the
+    // camera could still be actively running. Now: only tear down the
+    // UI state if the backend actually confirms the stop; on failure,
+    // surface it visibly and re-sync buttons from the real snapshot the
+    // backend returns alongside the error.
+    async function stopDetection() {
+      try {
+        await api("/api/stop", {method: "POST", body: "{}"});
+        stopVideo();
+        setButtons(false);
+      } catch (error) {
+        console.warn(error);
+        const snapshot = error.data && error.data.snapshot;
+        if (snapshot) {
+          setButtons(Boolean(snapshot.running));
+        }
+        showToast(
+          error.message === "Request failed"
+            ? "Detection did not stop in time - check the camera manually"
+            : error.message,
+          true
+        );
+      }
+    }
+
+    $("loginForm").addEventListener("submit", doLogin);
+    $("logoutBtn").addEventListener("click", endSession);
+    $("startBtn").addEventListener("click", startDetection);
+    $("stopBtn").addEventListener("click", stopDetection);
+
+    function startStatusPolling() {
+      stopStatusPolling();
+      const tick = async () => {
+        if (!state.authenticated) return;
+        try {
+          const status = await api("/api/status", {headers: {}});
+          renderStatus(status);
+          setChip("connChip", "good", "Connected");
+        } catch (error) {
+          if (state.authenticated) setChip("connChip", "bad", "Connection lost");
+        }
+      };
+      tick();
+      state.statusTimer = setInterval(tick, 1000);
+    }
+
+    function stopStatusPolling() {
+      if (state.statusTimer) clearInterval(state.statusTimer);
+      state.statusTimer = null;
+    }
+
+    function startVideo() {
+      stopVideo();
+      state.videoActive = true;
+      state.videoLoaded = false;
+      const img = $("videoFeed");
+      img.onload = () => {
+        state.reconnectDelay = 1000;
+        state.videoLoaded = true;
+        img.style.display = "block";
+        $("videoOverlay").style.display = "none";
+      };
+      img.onerror = () => {
+        img.style.display = "none";
+        $("videoOverlay").style.display = "flex";
+        $("videoMessage").textContent = "Reconnecting to live stream";
+        scheduleVideoReconnect();
+      };
+      img.src = apiUrl(`/video_feed?t=${Date.now()}`);
+    }
+
+    function stopVideo() {
+      if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
+      state.reconnectTimer = null;
+      state.videoActive = false;
+      state.videoLoaded = false;
+      $("videoFeed").removeAttribute("src");
+      $("videoFeed").style.display = "none";
+      $("videoOverlay").style.display = "flex";
+      $("videoMessage").textContent = "Camera Offline";
+    }
+
+    function scheduleVideoReconnect() {
+      if (!state.authenticated || !state.videoActive || state.reconnectTimer) return;
+      state.reconnectTimer = setTimeout(() => {
+        state.reconnectTimer = null;
+        $("videoFeed").src = apiUrl(`/video_feed?t=${Date.now()}`);
+        state.reconnectDelay = Math.min(10000, state.reconnectDelay * 1.6);
+      }, state.reconnectDelay);
+    }
+
+    function renderStatus(status) {
+      $("tbFps").textContent = `${Number(status.fps || 0).toFixed(1)} FPS`;
+      $("ssTracked").textContent = status.num_detected || 0;
+      $("ssViol").textContent = status.total_violations || 0;
+      $("hazard").textContent = status.any_hazard ? "Active" : "Clear";
+      $("hazard").style.color = status.any_hazard ? "var(--bad)" : "var(--good)";
+      setAlertBadge(Boolean(status.any_hazard));
+      setButtons(Boolean(status.running));
+
+      setChip("cameraChip", status.camera_online ? "good" : "bad",
+        status.camera_online ? "Camera online" : "Camera offline");
+      setChip("detectChip", status.running ? "good" : "warn",
+        status.running ? "Detection running" : "Detection idle");
+
+      if (!state.videoLoaded) {
+        if (status.camera_error || status.detector_error) {
+          $("videoOverlay").style.display = "flex";
+          $("videoMessage").textContent = status.camera_error || status.detector_error;
+        } else if (state.videoActive && $("videoFeed").style.display === "none") {
+          $("videoMessage").textContent = status.running ? "Camera starting" : "Detection stopped";
+        }
+      }
+      if (status.camera_online && status.running && state.videoActive &&
+          !state.videoLoaded && !state.reconnectTimer) {
+        scheduleVideoReconnect();
+      }
+
+      const stats = status.stats || {};
+      $("stats").innerHTML = Object.entries(stats).map(([key, value]) => {
+        const label = escapeHtml(key.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase()));
+        return `<div class="stat-row"><span>${label}</span><strong>${escapeHtml(value)}</strong></div>`;
+      }).join("");
+
+      const events = status.rt_events || [];
+      const latest = events[0];
+      if (latest && latest.id !== state.lastEventId) {
+        showViolationToast(latest);
+      }
+      if (latest) {
+        state.lastEventId = latest.id;
+      }
+      if (!events.length) {
+        $("events").innerHTML = `<div class="empty">No violations recorded.</div>`;
+        return;
+      }
+      $("events").innerHTML = events.slice(0, 20).map((event) => {
+        return `<div class="event"><time>${escapeHtml(event.timestamp)}</time><span>${escapeHtml(event.track_id)}</span><strong>${escapeHtml(event.violation)}</strong></div>`;
+      }).join("");
+    }
+
+    loadRooms().then(restoreSession).catch((error) => {
+      $("loginErr").textContent = error.message;
+    });
+  </script>
+</body>
+</html>
