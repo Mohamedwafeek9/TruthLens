@@ -52,7 +52,7 @@ except ImportError:
 BASE_DIR = Path(__file__).resolve().parent
 APP_PATH = BASE_DIR / os.getenv("TRUTHLENS_APP_FILE", "app_final_7th_Time.html")
 LOG_LEVEL = os.getenv("TRUTHLENS_LOG_LEVEL", "INFO").upper()
-
+MJPEG_BOUNDARY = b"truthlens-frame-boundary-9f3ac2"
 HAZARD_TYPES = ("Bad Posture", "Copying", "Phone Use", "Phone Found", "Paper Switch", "Restless")
 
 # Per-violation colors for the video overlay, kept in exact visual sync with
@@ -1398,14 +1398,18 @@ def stop_detection() -> Response:
         ), 503
     return jsonify({"status": "stopped", "snapshot": runtime.snapshot()})
 
-
 def mjpeg_frames():
     interval = max(0.02, float(os.getenv("TRUTHLENS_STREAM_INTERVAL_SEC", "0.04")))
     try:
         while True:
             frame = runtime.current_frame()
             if frame:
-                yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
+                yield (
+                    b"--" + MJPEG_BOUNDARY + b"\r\n"
+                    b"Content-Type: image/jpeg\r\n"
+                    b"Content-Length: " + str(len(frame)).encode("ascii") + b"\r\n"
+                    b"\r\n" + frame + b"\r\n"
+                )
             time.sleep(interval)
     except GeneratorExit:
         log.debug("video_feed client disconnected, stopping mjpeg generator")
@@ -1424,7 +1428,7 @@ def video_feed() -> Response:
         finally:
             _stream_semaphore.release()
 
-    response = Response(frames_with_release(), mimetype="multipart/x-mixed-replace; boundary=frame")
+    response = Response(frames_with_release(), mimetype=f"multipart/x-mixed-replace; boundary={MJPEG_BOUNDARY.decode('ascii')}")
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     return response
 
