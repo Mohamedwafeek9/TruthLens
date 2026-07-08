@@ -245,6 +245,7 @@
     .stat-row {
       display: flex;
       justify-content: space-between;
+      align-items: center;
       gap: 12px;
       padding: 8px 0;
       color: var(--muted);
@@ -252,6 +253,27 @@
     }
     .stat-row:last-child { border-bottom: 0; }
     .stat-row strong { color: var(--ink); }
+    .stat-row .stat-label { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .viol-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: inline-block;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
     .events {
       flex: 1;
       overflow: auto;
@@ -321,7 +343,7 @@
         <label for="room">Room</label>
         <select id="room" name="room" required></select>
       </div>
-      <button class="primary" type="submit">Start monitoring</button>
+      <button id="loginSubmit" class="primary" type="submit">Start monitoring</button>
       <div id="loginErr" class="error"></div>
     </form>
   </main>
@@ -358,6 +380,10 @@
           <div class="metric"><span>Hazard</span><strong id="hazard">Clear</strong></div>
         </div>
         <div class="panel-section">
+          <h2>Violation Colors</h2>
+          <div id="legend" class="legend"></div>
+        </div>
+        <div class="panel-section">
           <h2>Breakdown</h2>
           <div id="stats"></div>
         </div>
@@ -384,7 +410,8 @@
       authenticated: false,
       videoActive: false,
       videoLoaded: false,
-      userRole: null
+      userRole: null,
+      pollActive: false
     };
 
     const $ = (id) => document.getElementById(id);
@@ -429,6 +456,38 @@
       return data;
     }
 
+    // Single source of truth for violation colors - used by the stats
+    // breakdown, live events list, toast accents, and the legend. Keep
+    // these hex values in sync with HAZARD_COLORS in the backend (BGR
+    // equivalents used for the video overlay boxes), so the color on the
+    // live camera feed matches the color in this sidebar. Keys must match
+    // the backend's stats dict keys (lower_snake_case).
+    //
+    // Severity-ordered (red = worst, green = mildest), matching the app's
+    // existing --bad/--good convention instead of competing with it. Object
+    // key order is preserved by JS, so the legend renders in this same
+    // worst-to-mildest order.
+    const VIOLATION_COLORS = {
+      phone_use: "#E53935",
+      phone_found: "#F4511E",
+      paper_switch: "#FB8C00",
+      copying: "#FDD835",
+      bad_posture: "#C0CA33",
+      restless: "#43A047"
+    };
+
+    function violationColor(label) {
+      const key = String(label ?? "").toLowerCase().replaceAll(" ", "_");
+      return VIOLATION_COLORS[key] || "var(--muted)";
+    }
+
+    function renderLegend() {
+      $("legend").innerHTML = Object.keys(VIOLATION_COLORS).map((key) => {
+        const label = escapeHtml(key.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase()));
+        return `<div class="legend-item"><span class="viol-dot" style="background:${VIOLATION_COLORS[key]}"></span>${label}</div>`;
+      }).join("");
+    }
+
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, (char) => ({
         "&": "&amp;",
@@ -458,10 +517,15 @@
       return user;
     }
 
-    function showToast(message, isError = false) {
+    // accentColor lets a violation toast borrow that violation's specific
+    // color instead of the generic --bad red the CSS applies by default -
+    // reinforces the same color-to-violation association as the sidebar.
+    // Error toasts (accentColor omitted) fall back to the CSS default.
+    function showToast(message, isError = false, accentColor = null) {
       $("toastTitle").textContent = isError ? "Attention" : "Violation Detected";
       $("toastBody").textContent = message;
       $("toast").classList.toggle("error", isError);
+      $("toast").style.borderLeftColor = accentColor || "";
       $("toast").classList.add("show");
       if (state.toastTimer) clearTimeout(state.toastTimer);
       state.toastTimer = setTimeout(() => {
@@ -471,7 +535,11 @@
     }
 
     function showViolationToast(event) {
-      showToast(`Track ${event.track_id}: ${event.violation} at ${event.timestamp}`, false);
+      showToast(
+        `Track ${event.track_id}: ${event.violation} at ${event.timestamp}`,
+        false,
+        violationColor(event.violation)
+      );
     }
 
     function hideToast() {
@@ -479,6 +547,7 @@
       state.toastTimer = null;
       $("toast").classList.remove("show");
       $("toast").classList.remove("error");
+      $("toast").style.borderLeftColor = "";
     }
 
     function setAlertBadge(active) {
@@ -534,9 +603,21 @@
       startVideo();
     }
 
+    // FIX (#3 - empty room list had no fallback/error state): if
+    // /api/rooms ever returns an empty array (backend misconfiguration,
+    // partial startup), the <select> would silently end up with zero
+    // options while still being `required`, producing an unrecoverable-
+    // looking login screen with no explanation. Now: show a clear error
+    // and disable the submit button instead of leaving the user guessing.
     async function loadRooms() {
       const rooms = await api("/api/rooms", {headers: {}});
       $("room").innerHTML = "";
+      if (!rooms.length) {
+        $("loginErr").textContent = "No rooms are configured. Contact an administrator.";
+        $("loginSubmit").disabled = true;
+        return;
+      }
+      $("loginSubmit").disabled = false;
       rooms.forEach((room) => {
         const option = document.createElement("option");
         option.value = room.id;
@@ -567,9 +648,12 @@
             room_id: $("room").value
           })
         });
-        if (!data.ok) {
-          throw new Error(data.error || "Login failed");
-        }
+        // FIX (#2 - dead code): the previous `if (!data.ok) throw ...`
+        // check here could never execute. api() already throws on any
+        // non-2xx response, and the backend's /api/login never returns
+        // HTTP 200 with ok:false - every failure path (429 rate-limited,
+        // 401 bad credentials) is a non-2xx status that api() already
+        // catches above. Removed the unreachable branch.
         showDashboard(normalizeUser(data));
         renderStatus(data.status);
       } catch (error) {
@@ -585,10 +669,19 @@
       showLogin();
     }
 
+    // FIX (unnecessary stream churn): startVideo() always calls
+    // stopVideo() first internally, which tears down the current <img>
+    // connection and opens a brand new one. If the stream is already
+    // active and loaded (e.g. detection was already running), calling it
+    // again here was pure unnecessary churn - an extra close/reopen cycle
+    // on every Start click with no benefit. Only (re)start the stream if
+    // it isn't already up.
     async function startDetection() {
       try {
         await api("/api/start", {method: "POST", body: "{}"});
-        startVideo();
+        if (!state.videoActive || !state.videoLoaded) {
+          startVideo();
+        }
         setButtons(true);
       } catch (error) {
         console.warn(error);
@@ -631,24 +724,42 @@
     $("startBtn").addEventListener("click", startDetection);
     $("stopBtn").addEventListener("click", stopDetection);
 
+    // FIX (video degradation during active violations): the previous
+    // setInterval fired a new /api/status request every 1000ms regardless
+    // of whether the prior request had finished. If the backend takes
+    // longer than 1000ms to respond - which is more likely while
+    // violations are actively firing, since hazard classification,
+    // debounce history, and event logging all add per-frame work - this
+    // caused an unbounded pile-up of concurrent in-flight requests, all
+    // competing for the same limited browser connection pool and backend
+    // worker threads the video stream also depends on. That produces
+    // gradual, cumulative degradation rather than a sharp failure, which
+    // matches "video gets worse and worse" far better than a crash would.
+    // Fix: self-scheduling setTimeout that only queues the next poll after
+    // the current one (success or failure) has fully completed.
     function startStatusPolling() {
       stopStatusPolling();
+      state.pollActive = true;
       const tick = async () => {
-        if (!state.authenticated) return;
+        if (!state.authenticated || !state.pollActive) return;
         try {
           const status = await api("/api/status", {headers: {}});
           renderStatus(status);
           setChip("connChip", "good", "Connected");
         } catch (error) {
           if (state.authenticated) setChip("connChip", "bad", "Connection lost");
+        } finally {
+          if (state.pollActive) {
+            state.statusTimer = setTimeout(tick, 1000);
+          }
         }
       };
       tick();
-      state.statusTimer = setInterval(tick, 1000);
     }
 
     function stopStatusPolling() {
-      if (state.statusTimer) clearInterval(state.statusTimer);
+      state.pollActive = false;
+      if (state.statusTimer) clearTimeout(state.statusTimer);
       state.statusTimer = null;
     }
 
@@ -672,13 +783,27 @@
       img.src = apiUrl(`/video_feed?t=${Date.now()}`);
     }
 
+    // FIX (#1 - stale onerror handler after Stop): removeAttribute("src")
+    // on an <img> with no replacement src is treated as a load failure by
+    // most browsers, which fired the OLD onerror handler still attached
+    // from startVideo(). That handler set the message to "Reconnecting to
+    // live stream" and called scheduleVideoReconnect() - which correctly
+    // no-ops because videoActive is now false, so no actual reconnect
+    // happened, but the displayed text was overwritten to something that
+    // reads as "still trying to come back" right after a deliberate stop.
+    // On exam day that's exactly the wrong moment for an ambiguous status
+    // message. Fix: clear both handlers BEFORE touching src, so the stale
+    // callback can never fire.
     function stopVideo() {
       if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
       state.reconnectTimer = null;
       state.videoActive = false;
       state.videoLoaded = false;
-      $("videoFeed").removeAttribute("src");
-      $("videoFeed").style.display = "none";
+      const img = $("videoFeed");
+      img.onload = null;
+      img.onerror = null;
+      img.removeAttribute("src");
+      img.style.display = "none";
       $("videoOverlay").style.display = "flex";
       $("videoMessage").textContent = "Camera Offline";
     }
@@ -722,7 +847,8 @@
       const stats = status.stats || {};
       $("stats").innerHTML = Object.entries(stats).map(([key, value]) => {
         const label = escapeHtml(key.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase()));
-        return `<div class="stat-row"><span>${label}</span><strong>${escapeHtml(value)}</strong></div>`;
+        const color = violationColor(key);
+        return `<div class="stat-row"><span class="stat-label"><span class="viol-dot" style="background:${color}"></span>${label}</span><strong>${escapeHtml(value)}</strong></div>`;
       }).join("");
 
       const events = status.rt_events || [];
@@ -738,10 +864,12 @@
         return;
       }
       $("events").innerHTML = events.slice(0, 20).map((event) => {
-        return `<div class="event"><time>${escapeHtml(event.timestamp)}</time><span>${escapeHtml(event.track_id)}</span><strong>${escapeHtml(event.violation)}</strong></div>`;
+        const color = violationColor(event.violation);
+        return `<div class="event" style="border-left:3px solid ${color}"><time>${escapeHtml(event.timestamp)}</time><span>${escapeHtml(event.track_id)}</span><strong style="color:${color}">${escapeHtml(event.violation)}</strong></div>`;
       }).join("");
     }
 
+    renderLegend();
     loadRooms().then(restoreSession).catch((error) => {
       $("loginErr").textContent = error.message;
     });
