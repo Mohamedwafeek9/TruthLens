@@ -146,7 +146,7 @@ class DetectorConfig:
 
     nose_conf: float = float(os.getenv("TRUTHLENS_NOSE_CONF", "0.32"))
 
-    track_match_threshold: float = float(os.getenv("TRUTHLENS_TRACK_MATCH_THRESHOLD", "1.2"))
+    track_match_threshold: float = float(os.getenv("TRUTHLENS_TRACK_MATCH_THRESHOLD", "1.5"))
 
     object_person_radius_ratio: float = float(os.getenv("TRUTHLENS_OBJECT_RADIUS_RATIO", str(220.0 / 1280.0)))
 
@@ -534,23 +534,14 @@ class TrackManager:
 
             dist_score = distance / self.config.track_distance
 
-            # FIX (#7 - occlusion mishandling): previously, when either box
-            # was missing (a momentarily occluded person has no reliable
-            # keypoints_to_box()), iou_score defaulted to 1.0 - the WORST
-            # possible score - and was still blended in at iou_weight. That
-            # punished exactly the person we most need to keep tracking
-            # (someone briefly leaning out of frame), causing a spurious new
-            # track ID and a silent reset of their violation_count and
-            # hazard debounce history. Now: if we don't have both boxes, we
-            # fall back to pure distance-based matching instead of forcing
-            # in a max-penalty IoU term.
             prev_box = track.get("last_box")
             have_both_boxes = prev_box is not None and box is not None
             if have_both_boxes:
                 iou = compute_iou(prev_box, box)
                 if iou < 0.3:
-                    continue
-                iou_score = 1.0 - iou
+                    iou_score = 1.0
+                else:
+                    iou_score = 1.0 - iou
                 combined_score = (
                     (1.0 - self.config.iou_weight) * dist_score
                     + self.config.iou_weight * iou_score
@@ -771,7 +762,7 @@ class TruthLensRuntime:
             except Exception as exc:
                 processing_errors += 1
                 message = f"{type(exc).__name__}: {exc}"
-                log.warning("detector failure: %s", message)
+                log.warning("detector failure: %s\n%s", message, traceback.format_exc())
                 log.debug("detector traceback:\n%s", traceback.format_exc())
                 self._set_status(detector_error=message)
                 if processing_errors >= self.detector_config.processing_error_limit:
